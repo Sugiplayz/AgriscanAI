@@ -14,9 +14,24 @@ from PIL import Image, UnidentifiedImageError
 # ------------------------------------------------------------
 # AGRISCAN AI — Streamlit-first competition prototype
 # ------------------------------------------------------------
-MODEL_ID = os.getenv("AGRISCAN_MODEL_ID", "Kathir56/plant-disease-tamilnadu")
+MODEL_OPTIONS = {
+    "Higher-capacity Vision Transformer (ViT) — default": "kimcomehome/plantvillage-vit-leaf-disease",
+    "Lightweight MobileNetV2 — faster fallback": "Kathir56/plant-disease-tamilnadu",
+}
+# Optional deployment override. If set, it appears as a selectable model too.
+ENV_MODEL_ID = os.getenv("AGRISCAN_MODEL_ID", "").strip()
+if ENV_MODEL_ID and ENV_MODEL_ID not in MODEL_OPTIONS.values():
+    MODEL_OPTIONS["Custom model from AGRISCAN_MODEL_ID"] = ENV_MODEL_ID
+DEFAULT_MODEL_LABEL = next(
+    (name for name, model_id in MODEL_OPTIONS.items() if model_id == ENV_MODEL_ID),
+    "Higher-capacity Vision Transformer (ViT) — default",
+)
+if ENV_MODEL_ID and ENV_MODEL_ID in MODEL_OPTIONS.values():
+    DEFAULT_MODEL_LABEL = next(name for name, model_id in MODEL_OPTIONS.items() if model_id == ENV_MODEL_ID)
+
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+PROJECT_CREDIT = "Jayakanth & [Bro’s Name]"  # Personalize when the project partner's name is known.
 
 st.set_page_config(
     page_title="Agriscan AI | Plant Intelligence",
@@ -138,6 +153,32 @@ div[role="radiogroup"] label:has(input:checked) { border-color:#a8d596; backgrou
 .stButton > button[kind="primary"]:hover { background:linear-gradient(135deg,#e3f7d5,#bce5aa) !important; color:#0b2113 !important; }
 .stButton > button:disabled { background:#24372a !important; color:#a8b9a5 !important; border-color:#3d5540 !important; }
 
+/* Critical contrast fix: Streamlit renders the button label inside nested elements.
+   The global .stApp p rule uses !important, so set the inner label explicitly too. */
+.stApp div[data-testid="stButton"] > button[kind="primary"],
+.stApp div[data-testid="stButton"] > button[data-testid="stBaseButton-primary"] {
+  background:linear-gradient(135deg,#d6efc6,#a9d596) !important;
+  color:#102819 !important;
+  -webkit-text-fill-color:#102819 !important;
+  border:1px solid #d6efc6 !important;
+}
+.stApp div[data-testid="stButton"] > button[kind="primary"] *,
+.stApp div[data-testid="stButton"] > button[data-testid="stBaseButton-primary"] *,
+.stApp button[kind="primary"] p,
+.stApp button[kind="primary"] span,
+.stApp button[data-testid="stBaseButton-primary"] p,
+.stApp button[data-testid="stBaseButton-primary"] span {
+  color:#102819 !important;
+  -webkit-text-fill-color:#102819 !important;
+  opacity:1 !important;
+  text-shadow:none !important;
+}
+.stApp div[data-testid="stButton"] > button[kind="primary"]:hover *,
+.stApp div[data-testid="stButton"] > button[data-testid="stBaseButton-primary"]:hover * {
+  color:#0b2113 !important;
+  -webkit-text-fill-color:#0b2113 !important;
+}
+
 .stTabs [data-baseweb="tab-list"] { background:rgba(8,21,13,.9); border:1px solid var(--ag-border); border-radius:15px; padding:5px; gap:5px; }
 .stTabs [data-baseweb="tab"] { border-radius:11px; padding:.7rem 1rem; color:#d3e2cd !important; }
 .stTabs [data-baseweb="tab"] p { color:inherit !important; font-size:.95rem !important; font-weight:700 !important; }
@@ -181,12 +222,12 @@ def init_state() -> None:
 
 
 @st.cache_resource(show_spinner=False)
-def get_classifier():
+def get_classifier(model_id: str):
     from transformers import pipeline
 
     return pipeline(
         "image-classification",
-        model=MODEL_ID,
+        model=model_id,
         device=-1,
     )
 
@@ -241,7 +282,7 @@ def set_active_image(raw: bytes, source: str, filename: str) -> tuple[str, Image
     return digest, image
 
 
-def run_analysis(raw: bytes, source: str, filename: str) -> bool:
+def run_analysis(raw: bytes, source: str, filename: str, model_id: str) -> bool:
     try:
         image, _fmt, _size = validate_image(raw)
     except ValueError as exc:
@@ -250,7 +291,7 @@ def run_analysis(raw: bytes, source: str, filename: str) -> bool:
 
     try:
         with st.spinner("Loading the classifier and analyzing your leaf…"):
-            classifier = get_classifier()
+            classifier = get_classifier(model_id)
             results = classifier(image, top_k=3)
         if not isinstance(results, list) or not results:
             st.error("The classifier returned no candidate classes. Try a clearer image.")
@@ -280,6 +321,7 @@ def run_analysis(raw: bytes, source: str, filename: str) -> bool:
             "source": source,
             "filename": filename,
             "created_at": time.strftime("%H:%M:%S"),
+            "model_id": model_id,
         }
         st.session_state["ag_report_hash"] = digest
         return True
@@ -394,7 +436,13 @@ def report_html(results: list[dict[str, Any]]) -> None:
 - Ask a local agricultural extension officer or qualified expert before applying a treatment.
 - Do not spray chemicals solely on the basis of this AI output.
 """)
-    st.caption(f"Source: {html.escape(st.session_state.get('ag_report', {}).get('source', 'image'))} · {html.escape(st.session_state.get('ag_report', {}).get('filename', 'leaf image'))} · {st.session_state.get('ag_report', {}).get('created_at', '')}")
+    report_state = st.session_state.get("ag_report", {})
+    model_used = html.escape(str(report_state.get("model_id", "not recorded")))
+    st.caption(
+        f"Source: {html.escape(str(report_state.get('source', 'image')))} · "
+        f"{html.escape(str(report_state.get('filename', 'leaf image')))} · "
+        f"{report_state.get('created_at', '')} · Model: {model_used}"
+    )
 
 
 # ----------------------------- State ------------------------------
@@ -411,10 +459,35 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Model selector — high-capacity vision model first, compact fallback available.
+model_row_left, model_row_right = st.columns([1.05, 1], gap="medium")
+with model_row_left:
+    model_choice = st.selectbox(
+        "AI model engine",
+        options=list(MODEL_OPTIONS.keys()),
+        index=list(MODEL_OPTIONS.keys()).index(DEFAULT_MODEL_LABEL),
+        key="ag_model_choice",
+        help="The ViT has more parameters and may take longer to download/start. Use MobileNetV2 if the cloud app runs out of memory or loads too slowly.",
+    )
+active_model_id = MODEL_OPTIONS[model_choice]
+with model_row_right:
+    if "Vision Transformer" in model_choice:
+        model_note = "Higher-capacity candidate · slower first load · field accuracy still unverified"
+    elif "MobileNetV2" in model_choice:
+        model_note = "Compact fallback · faster load · field accuracy still unverified"
+    else:
+        model_note = "Custom model selected from AGRISCAN_MODEL_ID · verify labels and compatibility"
+    st.markdown(
+        f"<div class='ag-glass' style='height:100%'><div class='ag-kicker'>SELECTED MODEL</div>"
+        f"<div class='ag-glass-title' style='margin-top:.45rem;overflow-wrap:anywhere'>{html.escape(model_choice)}</div>"
+        f"<div class='ag-secondary'>{html.escape(model_note)}</div></div>",
+        unsafe_allow_html=True,
+    )
+
 # Status strip
 status_col1, status_col2, status_col3 = st.columns(3, gap="medium")
 with status_col1:
-    st.markdown("<div class='ag-glass'><div class='ag-kicker'>MODEL</div><div class='ag-glass-title' style='margin-top:.45rem'>Plant classifier</div><div class='ag-secondary'>Hugging Face Transformers · CPU inference</div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='ag-glass'><div class='ag-kicker'>MODEL</div><div class='ag-glass-title' style='margin-top:.45rem'>Plant classifier</div><div class='ag-secondary'>{html.escape(active_model_id)} · CPU inference</div></div>", unsafe_allow_html=True)
 with status_col2:
     device_status = st.session_state.get("ag_device_status")
     label = "Not tested" if device_status is None else ("Reachable" if device_status else "Unavailable")
@@ -546,7 +619,7 @@ if raw is not None:
                 st.success("Capture received. Automatic analysis was requested.")
             else:
                 if st.button("✦  Analyze plant", type="primary", use_container_width=True, key="ag_analyze_manual"):
-                    run_analysis(raw, source, filename)
+                    run_analysis(raw, source, filename, active_model_id)
             st.button("Clear image and report", use_container_width=True, key="ag_clear_image", on_click=clear_active_image)
     except ValueError as exc:
         st.error(str(exc))
@@ -555,14 +628,14 @@ if raw is not None:
 # stored as the active image; doing it earlier would clear the report on rerun.
 if mode == "ESP32-CAM" and raw is not None and st.session_state.get("ag_esp32_pending_autoscan"):
     st.session_state["ag_esp32_pending_autoscan"] = False
-    run_analysis(raw, source, filename)
+    run_analysis(raw, source, filename, active_model_id)
 
 # Newly captured browser image: auto-analyze just once per unique image.
 if mode == "Browser camera" and new_camera_capture and raw is not None and st.session_state.get("ag_camera_auto", True):
     camera_hash = hashlib.sha256(raw).hexdigest()
     if st.session_state.get("ag_last_camera_auto_hash") != camera_hash:
         st.session_state["ag_last_camera_auto_hash"] = camera_hash
-        run_analysis(raw, source, filename)
+        run_analysis(raw, source, filename, active_model_id)
 
 # Show the latest report only for the image that produced it.
 report = st.session_state.get("ag_report")
@@ -594,11 +667,19 @@ with st.expander("ESP32-CAM integration — what needs to be true", expanded=Fal
 
 with st.expander("Model and validation notes", expanded=False):
     st.markdown(f"""
-**Configured model ID:** `{html.escape(MODEL_ID)}`
+**Currently selected model ID:** `{html.escape(active_model_id)}`
 
-The model is loaded server-side using Transformers and CPU inference. The app cannot verify field accuracy automatically, and model scores are not calibrated probabilities. Test it with known examples from varied lighting/backgrounds and with plants/images outside the expected classes before presenting performance claims.
+A higher-capacity Vision Transformer is selected by default as a candidate to compare against the original lightweight MobileNetV2. Larger models are not automatically more accurate on real farm photographs. Public benchmark numbers for PlantVillage are not guarantees of performance in the field; different image backgrounds, crop varieties, lighting and unseen diseases can change results substantially.
 
-A serious competition demo should record which images were tested, the expected label, the model's top prediction, and whether it was correct. Do not report accuracy from a handful of hand-picked internet photos as general real-world accuracy.
+Model scores are not calibrated probabilities. Before claiming which model is better, test both on the same labelled set of varied images and compare top-1 accuracy, per-class errors, and how often the model confidently gets an example wrong. If the ViT times out or exceeds the Streamlit Cloud memory limit, switch to MobileNetV2 using the model selector above.
+
+A serious competition demo should record each test image, expected label, top prediction and correctness. Do not report accuracy from a handful of hand-picked internet photos as general real-world accuracy.
 """)
 
-st.markdown("""<div class='ag-footer'><strong>AGRISCAN AI</strong><br>Student innovation prototype · AI-assisted plant-health screening<br>Not a substitute for expert agricultural diagnosis.</div>""", unsafe_allow_html=True)
+st.markdown(
+    f"""<div class='ag-footer'><strong>AGRISCAN AI</strong><br>
+    Created by {html.escape(PROJECT_CREDIT)}<br>
+    Student innovation prototype · AI-assisted plant-health screening<br>
+    Not a substitute for expert agricultural diagnosis.</div>""",
+    unsafe_allow_html=True,
+)
