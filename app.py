@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import csv
 import hashlib
 import html
 import io
@@ -12,7 +13,7 @@ from urllib.parse import urljoin
 
 import requests
 import streamlit as st
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageStat, UnidentifiedImageError
 
 # ============================================================
 # AGRISCAN AI — STREAMLIT EDITION
@@ -223,7 +224,55 @@ div[data-testid="stButton"] > button:disabled,.stApp button[data-testid^="stBase
 hr { border-color:rgba(183,220,166,.19) !important; margin:1.8rem 0 !important; }
 :focus-visible { outline:3px solid #d2efc0 !important; outline-offset:3px !important; }
 
-/* Top-tier motion, restrained for performance and accessibility */
+/* Editorial redesign: one clear visual focal point, quieter supporting cards. */
+.block-container { max-width:1240px; padding:1.2rem 2rem 3.5rem; }
+.ag-nav { padding:.65rem 0 1.35rem; margin-bottom:1.7rem; }
+.ag-brand-mark { width:45px; height:45px; border-radius:16px; }
+.ag-hero-layout { display:grid; grid-template-columns:minmax(0,1.18fr) minmax(290px,.82fr); gap:1.4rem; align-items:stretch; margin-bottom:1.8rem; }
+.ag-hero { min-height:350px; display:flex; flex-direction:column; justify-content:center; margin-bottom:0; }
+.ag-hero h1 { max-width:730px; font-size:clamp(2.8rem,5.7vw,5.1rem); line-height:1.01; }
+.ag-hero h1 span { color:#c8e8b7; }
+.ag-hero p { max-width:630px; font-size:1.06rem; }
+.ag-hero-tag { margin-top:1.5rem; }
+.ag-hero-visual { position:relative; isolation:isolate; min-height:350px; overflow:hidden; border-radius:29px; border:1px solid rgba(195,229,179,.28); background:radial-gradient(circle at 52% 40%,rgba(135,190,104,.24),transparent 42%),linear-gradient(145deg,rgba(26,52,34,.96),rgba(8,24,14,.99)); box-shadow:0 25px 65px rgba(0,0,0,.23),inset 0 1px 0 rgba(255,255,255,.07); display:flex; align-items:center; justify-content:center; }
+.ag-hero-visual:before { content:""; position:absolute; width:235px; height:235px; border-radius:50%; border:1px solid rgba(211,238,195,.26); box-shadow:0 0 0 17px rgba(195,229,179,.035),0 0 0 42px rgba(195,229,179,.025),0 0 0 67px rgba(195,229,179,.018); animation:orbit-slow 48s linear infinite; }
+.ag-orbit { position:absolute; width:190px; height:190px; border-radius:50%; border:1px dashed rgba(203,235,187,.34); animation:orbit-slow 29s linear infinite reverse; }
+.ag-orbit:before { content:""; position:absolute; top:17px; right:20px; width:10px; height:10px; border-radius:50%; background:#d8f0c6; box-shadow:0 0 16px rgba(216,240,198,.8); }
+.ag-hero-leaf { z-index:1; font-size:6.3rem; filter:drop-shadow(0 12px 35px rgba(146,205,117,.3)); animation:hero-float 6s ease-in-out infinite; }
+.ag-visual-label { position:absolute; z-index:2; top:1.2rem; left:1.2rem; color:#cce6c1; font-size:.76rem; letter-spacing:1.9px; text-transform:uppercase; font-weight:850; }
+.ag-visual-status { position:absolute; z-index:2; bottom:1.2rem; left:1.2rem; right:1.2rem; padding:1rem 1.1rem; border:1px solid rgba(192,227,177,.29); background:rgba(8,24,14,.76); backdrop-filter:blur(18px); border-radius:18px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.ag-visual-status strong { color:#f0f7ea; font-size:1rem; display:block; }
+.ag-visual-status span { color:#c5d9bf; font-size:.84rem; display:block; margin-top:.25rem; }
+.ag-live-dot { width:9px; height:9px; display:inline-block; flex:0 0 9px; border-radius:50%; background:#badf9e; box-shadow:0 0 0 5px rgba(186,223,158,.12); animation:dot-pulse 2.5s ease-in-out infinite; }
+.ag-stat { min-height:112px; transition:transform .22s ease,border-color .22s ease; }
+.ag-stat:hover { transform:translateY(-3px); border-color:rgba(207,236,190,.5); }
+.ag-section-head { margin-top:1.2rem; margin-bottom:1.2rem; }
+.ag-section-title { font-size:clamp(1.55rem,2.4vw,2rem); }
+.ag-section-sub { max-width:780px; font-size:1.01rem; }
+.ag-glass { padding:1.5rem; border-radius:24px; }
+.ag-report-card { border-radius:24px; padding:1.7rem; }
+.ag-candidate { padding:1rem 1.1rem; }
+.ag-step-num { border-radius:50%; }
+.ag-feature-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+.ag-feature-card { min-height:185px; position:relative; overflow:hidden; border-radius:22px; padding:1.35rem; background:linear-gradient(145deg,rgba(24,48,31,.93),rgba(12,27,17,.97)); border:1px solid rgba(188,224,174,.23); box-shadow:0 15px 38px rgba(0,0,0,.13); transition:transform .25s ease,border-color .25s ease; animation:reveal-up .6s both; }
+.ag-feature-card:hover { transform:translateY(-4px); border-color:rgba(203,237,187,.5); }
+.ag-feature-card:nth-child(2) { animation-delay:.08s; }
+.ag-feature-card:nth-child(3) { animation-delay:.16s; }
+.ag-feature-icon { width:47px; height:47px; border-radius:15px; display:grid; place-items:center; background:linear-gradient(145deg,#d9f0c7,#8cbd80); color:#0d2817; font-size:1.35rem; margin-bottom:1rem; box-shadow:0 7px 20px rgba(143,191,125,.13); }
+.ag-feature-title { color:#f3f8ef; font-family:'Manrope',sans-serif; font-size:1.05rem; font-weight:800; margin-bottom:.4rem; }
+.ag-feature-body { color:#d0dfca; font-size:.95rem; line-height:1.7; }
+.ag-quality-score { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.35rem; }
+.ag-quality-title { color:#f4f8ef; font-weight:800; font-size:1rem; }
+.ag-quality-badge { padding:.35rem .65rem; border-radius:999px; background:rgba(188,224,174,.13); border:1px solid rgba(188,224,174,.28); color:#e0f2d4; font-weight:800; font-size:.8rem; }
+.ag-quality-track { height:8px; background:#263d2a; border-radius:99px; overflow:hidden; margin:.8rem 0; }
+.ag-quality-fill { height:100%; background:linear-gradient(90deg,#7bad6e,#d6f0bd); border-radius:99px; }
+.ag-history-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:center; padding:1rem 0; border-bottom:1px solid rgba(188,224,174,.15); }
+.ag-history-row:last-child { border-bottom:0; }
+.ag-history-name { color:#f1f7ec; font-weight:800; line-height:1.45; overflow-wrap:anywhere; }
+.ag-history-meta { color:#c0d3ba; font-size:.88rem; line-height:1.7; margin-top:.25rem; }
+.ag-history-score { color:#dbf1cb; font-family:'Manrope',sans-serif; font-size:1.2rem; font-weight:850; text-align:right; }
+.ag-feature-note { color:#bed2b8; font-size:.87rem; line-height:1.7; }
+@keyframes dot-pulse { 0%,100% { box-shadow:0 0 0 4px rgba(186,223,158,.11); } 50% { box-shadow:0 0 0 8px rgba(186,223,158,.025); } }
 @keyframes reveal-up { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 @keyframes ambient-drift { from { transform:translate3d(-1.2%,0,0) scale(1); } to { transform:translate3d(1.2%,1%,0) scale(1.035); } }
 @keyframes hero-float { 0%,100% { transform:translateY(0) rotate(-4deg); } 50% { transform:translateY(-12px) rotate(4deg); } }
@@ -233,8 +282,14 @@ hr { border-color:rgba(183,220,166,.19) !important; margin:1.8rem 0 !important; 
 @keyframes button-glow { 0%,100% { background-position:0% 50%; box-shadow:0 8px 22px rgba(125,181,105,.14); } 50% { background-position:100% 50%; box-shadow:0 10px 30px rgba(125,181,105,.25); } }
 @keyframes progress-sheen { from { background-position:0% 50%; } to { background-position:200% 50%; } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; } }
+@media (max-width:900px) {
+  .ag-hero-layout { grid-template-columns:1fr; }
+  .ag-hero-visual { min-height:280px; }
+  .ag-feature-grid { grid-template-columns:1fr; }
+}
 @media (max-width:760px) {
   .block-container { padding:.9rem 1rem 2rem; }
+  .ag-hero { min-height:unset; }
   .ag-nav { align-items:flex-start; flex-direction:column; }
   .ag-nav-right { text-align:left; font-size:.78rem; }
   .ag-hero { padding:1.65rem 1.35rem; border-radius:22px; }
@@ -265,6 +320,9 @@ def init_state() -> None:
         "ag_esp32_capture_bytes": None,
         "ag_esp32_capture_name": None,
         "ag_esp32_pending_autoscan": False,
+        "ag_history": [],
+        "ag_field_note": "",
+        "ag_comparison": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -306,6 +364,49 @@ def validate_image(raw: bytes) -> tuple[Image.Image, str, tuple[int, int]]:
     if image.width < 96 or image.height < 96:
         raise ValueError("This image is very small. Please use a clearer image at least 96 × 96 pixels.")
     return image, fmt, image.size
+
+
+def assess_capture_quality(image: Image.Image) -> dict[str, Any]:
+    """Transparent, lightweight image-quality hints; never a disease prediction."""
+    gray = image.convert("L")
+    stats = ImageStat.Stat(gray)
+    brightness = float(stats.mean[0])
+    contrast = float(stats.stddev[0])
+    width, height = image.size
+    score = 100
+    notes: list[str] = []
+
+    if min(width, height) < 320:
+        score -= 20
+        notes.append("Low image resolution may hide small visual details.")
+    if brightness < 48:
+        score -= 25
+        notes.append("The image looks quite dark; try softer, brighter natural light.")
+    elif brightness < 72:
+        score -= 10
+        notes.append("The image is somewhat dark; more even light may help.")
+    elif brightness > 224:
+        score -= 25
+        notes.append("The image is very bright; reduce glare or direct sunlight.")
+    elif brightness > 205:
+        score -= 10
+        notes.append("Bright areas may wash out leaf details.")
+    if contrast < 18:
+        score -= 20
+        notes.append("The image has low tonal contrast; choose a clearer angle/background.")
+    score = max(0, min(100, score))
+    if not notes:
+        notes.append("Basic lighting, contrast and resolution checks look reasonable.")
+    label = "Looks good" if score >= 80 else ("Could be improved" if score >= 55 else "Consider a rescan")
+    return {
+        "score": score,
+        "label": label,
+        "brightness": round(brightness, 1),
+        "contrast": round(contrast, 1),
+        "width": width,
+        "height": height,
+        "notes": notes,
+    }
 
 
 def clear_active_image() -> None:
@@ -456,18 +557,39 @@ def run_analysis(raw: bytes, source: str, filename: str, model_label: str, model
 
             progress_slot.progress(94, text="Building the report…")
             digest = hashlib.sha256(raw).hexdigest()
-            st.session_state["ag_report"] = {
+            quality = assess_capture_quality(image)
+            created_at = time.strftime("%Y-%m-%d %H:%M:%S")
+            report = {
                 "results": predictions,
                 "review": review,
                 "review_error": review_error,
                 "image_hash": digest,
                 "source": source,
                 "filename": filename,
-                "created_at": time.strftime("%H:%M:%S"),
+                "created_at": created_at,
                 "model_id": model_id,
                 "model_label": model_label,
                 "gemini_used": bool(review),
+                "quality": quality,
+                "field_note": str(st.session_state.get("ag_field_note", "")).strip()[:500],
             }
+            st.session_state["ag_report"] = report
+            history = list(st.session_state.get("ag_history", []))
+            # Session-only notebook stores report metadata, never the image itself.
+            history.insert(0, {
+                "created_at": created_at,
+                "source": source,
+                "filename": filename,
+                "prediction": predictions[0]["label"],
+                "score": predictions[0]["score"],
+                "model_id": model_id,
+                "image_hash": digest,
+                "field_note": report["field_note"],
+                "quality_score": quality["score"],
+                "candidate_count": len(predictions),
+            })
+            st.session_state["ag_history"] = history[:12]
+            st.session_state["ag_comparison"] = None
             status.update(label="Analysis complete", state="complete", expanded=False)
             progress_slot.progress(100, text="Report ready")
         time.sleep(0.12)
@@ -547,6 +669,40 @@ def render_report(report: dict[str, Any]) -> None:
             unsafe_allow_html=True,
         )
 
+    quality = report.get("quality") or {}
+    if quality:
+        quality_col1, quality_col2 = st.columns([1.05, .95], gap="large")
+        with quality_col1:
+            st.markdown(
+                f'<div class="ag-glass" style="margin-top:1rem"><div class="ag-kicker">IMAGE QUALITY HINT</div><div class="ag-quality-score"><div class="ag-quality-title">{escaped(quality.get("label", "Not assessed"))}</div><span class="ag-quality-badge">{int(quality.get("score", 0))}/100</span></div><div class="ag-quality-track"><div class="ag-quality-fill" style="width:{max(0,min(100,int(quality.get("score",0))))}%"></div></div><div class="ag-feature-note">A simple lighting, tonal-contrast and resolution heuristic. It does not detect disease and cannot guarantee a good image.</div></div>',
+                unsafe_allow_html=True,
+            )
+        with quality_col2:
+            if report.get("field_note"):
+                st.markdown(
+                    f'<div class="ag-glass" style="margin-top:1rem"><div class="ag-kicker">YOUR FIELD NOTE</div><div class="ag-secondary" style="margin-top:.65rem">{escaped(report["field_note"])}</div></div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<div class="ag-glass" style="margin-top:1rem"><div class="ag-kicker">NEXT BEST STEP</div><div class="ag-secondary" style="margin-top:.65rem">Compare this result with several leaves from the same plant before drawing a conclusion.</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+    export_col, status_col = st.columns([1, 1], gap="medium")
+    with export_col:
+        report_export = {k: v for k, v in report.items() if k != "image_hash"}
+        st.download_button(
+            "↓  Export this report · JSON",
+            data=json.dumps(report_export, ensure_ascii=False, indent=2),
+            file_name=f"agriscan-report-{time.strftime('%Y%m%d-%H%M%S')}.json",
+            mime="application/json",
+            use_container_width=True,
+            key="ag_export_report_json",
+        )
+    with status_col:
+        st.markdown('<div class="ag-feature-note" style="padding:.55rem 0">Report export includes the model outputs and notes, not the original image.</div>', unsafe_allow_html=True)
+
     if healthy:
         st.success("The highest-ranked class contains ‘healthy’. This does not rule out disease, pests or other plant stress.")
     else:
@@ -595,6 +751,82 @@ def render_report(report: dict[str, Any]) -> None:
     elif review_error:
         st.warning(f"Advanced vision review was unavailable; classifier result is shown. Details: {review_error}")
 
+    with st.expander("Research lab · compare both classifiers", expanded=False):
+        primary_id = str(report.get("model_id", ""))
+        vit_id = MODEL_OPTIONS["Specialist leaf classifier · Vision Transformer"]
+        mobile_id = MODEL_OPTIONS["Lightweight fallback · MobileNetV2"]
+        if primary_id == vit_id:
+            comparison_id = mobile_id
+            comparison_name = "Lightweight fallback · MobileNetV2"
+        else:
+            comparison_id = vit_id
+            comparison_name = "Specialist leaf classifier · Vision Transformer"
+        st.markdown(
+            '<div class="ag-feature-note">Run a second classifier on the same image and compare its top-ranked class. This is an exploratory consistency check, not a way to prove which model is right. The Vision Transformer may take longer to load.</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("⇄  Compare with the other classifier", use_container_width=True, key="ag_compare_models"):
+            current_raw = st.session_state.get("ag_image_bytes")
+            if not current_raw or hashlib.sha256(current_raw).hexdigest() != report.get("image_hash"):
+                st.warning("The original image is no longer available in this session. Re-select it and run the scan again.")
+            else:
+                try:
+                    with st.spinner(f"Loading {comparison_name} and comparing the same image…"):
+                        comparison_image, _, _ = validate_image(current_raw)
+                        second_classifier = get_classifier(comparison_id)
+                        second_predictions = normalize_classifier_results(second_classifier(comparison_image, top_k=3))
+                    if not second_predictions:
+                        st.warning("The second classifier returned no valid candidate classes.")
+                        st.session_state["ag_comparison"] = None
+                    else:
+                        st.session_state["ag_comparison"] = {
+                            "image_hash": report.get("image_hash"),
+                            "primary_model": str(report.get("model_label", primary_id)),
+                            "primary_id": primary_id,
+                            "primary_results": report.get("results", []),
+                            "secondary_model": comparison_name,
+                            "secondary_id": comparison_id,
+                            "secondary_results": second_predictions,
+                        }
+                except Exception as exc:
+                    st.error("The model comparison could not be completed. The original report remains available.")
+                    with st.expander("Comparison technical details", expanded=False):
+                        st.code(f"{type(exc).__name__}: {exc}")
+
+        comparison = st.session_state.get("ag_comparison")
+        if comparison and comparison.get("image_hash") == report.get("image_hash"):
+            primary_predictions = comparison.get("primary_results", [])
+            secondary_predictions = comparison.get("secondary_results", [])
+            if primary_predictions and secondary_predictions:
+                primary_top = primary_predictions[0]
+                secondary_top = secondary_predictions[0]
+                same_label = str(primary_top.get("label", "")).strip().lower() == str(secondary_top.get("label", "")).strip().lower()
+                cmp1, cmp2 = st.columns(2, gap="large")
+                with cmp1:
+                    st.markdown(
+                        f'<div class="ag-report-card"><div class="ag-kicker">MODEL A</div><div class="ag-feature-title" style="margin-top:.65rem">{escaped(comparison.get("primary_model", "Classifier A"))}</div><div class="ag-result-name" style="font-size:1.1rem">{escaped(pretty_label(primary_top["label"]))}</div><div class="ag-score-value" style="font-size:2rem">{float(primary_top["score"]):.1%}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                with cmp2:
+                    st.markdown(
+                        f'<div class="ag-report-card"><div class="ag-kicker">MODEL B</div><div class="ag-feature-title" style="margin-top:.65rem">{escaped(comparison.get("secondary_model", "Classifier B"))}</div><div class="ag-result-name" style="font-size:1.1rem">{escaped(pretty_label(secondary_top["label"]))}</div><div class="ag-score-value" style="font-size:2rem">{float(secondary_top["score"]):.1%}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                if same_label:
+                    st.success("Both models ranked the same class first. Agreement is useful evidence to record, but it does not establish correctness.")
+                else:
+                    st.warning("The models disagreed on the top class. Treat the result as uncertain and verify the sample independently.")
+                with st.expander("Show both rankings", expanded=False):
+                    rank_col_a, rank_col_b = st.columns(2, gap="large")
+                    with rank_col_a:
+                        st.markdown(f"**{escaped(comparison.get('primary_model', 'Model A'))}**")
+                        for i, candidate in enumerate(primary_predictions, start=1):
+                            st.write(f"{i}. {pretty_label(candidate['label'])} · {float(candidate['score']):.1%}")
+                    with rank_col_b:
+                        st.markdown(f"**{escaped(comparison.get('secondary_model', 'Model B'))}**")
+                        for i, candidate in enumerate(secondary_predictions, start=1):
+                            st.write(f"{i}. {pretty_label(candidate['label'])} · {float(candidate['score']):.1%}")
+
     with st.expander("How to interpret this report", expanded=False):
         st.write("The specialist model compares the picture with patterns in its training data and returns ranked classes. A higher score does not prove that a label is correct. Models trained on clean, controlled leaf photos can perform much worse in real fields with variable backgrounds, lighting, crop varieties and unfamiliar disease patterns.")
         st.write("The advanced vision model, when enabled, is a second opinion for image observations—not a lab test or a trained local agronomist. Disagreement between the two outputs is a reason to verify, not to pick whichever sounds more certain.")
@@ -616,10 +848,20 @@ def render_report(report: dict[str, Any]) -> None:
 init_state()
 
 st.markdown(
-    """<div class="ag-nav"><div class="ag-brand"><div class="ag-brand-mark">🌿</div><span>Agriscan AI</span></div><div class="ag-nav-right"><span class="ag-status-dot"></span>PLANT INTELLIGENCE &nbsp;·&nbsp; STUDENT INNOVATION</div></div>
-    <section class="ag-hero"><div class="ag-eyebrow">AGRICULTURE &nbsp;·&nbsp; COMPUTER VISION</div><h1>Plant health,<br>in clearer focus.</h1><p>Scan a leaf, compare AI signals, and get clear next steps. Designed for a real camera workflow—with honest limitations and a polished field-ready interface.</p><div class="ag-hero-tag">✦ &nbsp; AI-assisted screening · Verify before treatment</div><div class="ag-floating-leaf" aria-hidden="true">🍃</div></section>""",
+    """<div class="ag-nav"><div class="ag-brand"><div class="ag-brand-mark">🌿</div><span>Agriscan AI</span></div><div class="ag-nav-right"><span class="ag-status-dot"></span>PLANT INTELLIGENCE &nbsp;·&nbsp; FIELD LAB 01</div></div>""",
     unsafe_allow_html=True,
 )
+hero_left, hero_right = st.columns([1.15, .85], gap="large")
+with hero_left:
+    st.markdown(
+        """<section class="ag-hero"><div class="ag-eyebrow">AGRICULTURE &nbsp;·&nbsp; COMPUTER VISION</div><h1>See the leaf.<br><span>Read the signal.</span></h1><p>One thoughtful scan. Multiple clues. A clearer next step. Agriscan combines specialist image classification with optional visual review—while keeping uncertainty visible.</p><div class="ag-hero-tag">✦ &nbsp; AI-assisted screening · Verify before treatment</div></section>""",
+        unsafe_allow_html=True,
+    )
+with hero_right:
+    st.markdown(
+        """<div class="ag-hero-visual"><div class="ag-visual-label">FIELD INTELLIGENCE · 01</div><div class="ag-orbit"></div><div class="ag-hero-leaf" aria-hidden="true">🍃</div><div class="ag-visual-status"><div><strong>Ready for your sample</strong><span>Capture · Classify · Verify</span></div><span class="ag-live-dot" aria-hidden="true"></span></div></div>""",
+        unsafe_allow_html=True,
+    )
 
 # Overview stats
 s1, s2, s3 = st.columns(3, gap="medium")
@@ -795,8 +1037,16 @@ if raw is not None:
                 iw, ih = preview_image.size
                 st.caption(f"{filename} · {iw} × {ih}px · {len(raw)/1024:.0f} KB · {source}")
         with action_col:
+            quality = assess_capture_quality(preview_image)
+            quality_color = "#d7efc7" if quality["score"] >= 80 else ("#f0d99a" if quality["score"] >= 55 else "#ffb9a7")
+            quality_notes = " ".join(quality["notes"])
+            st.markdown(
+                f'<div class="ag-glass" style="margin-bottom:1rem"><div class="ag-kicker">CAPTURE QUALITY CHECK</div><div class="ag-quality-score"><div class="ag-quality-title">{escaped(quality["label"])}</div><span class="ag-quality-badge">{quality["score"]}/100</span></div><div class="ag-quality-track"><div class="ag-quality-fill" style="width:{quality["score"]}%"></div></div><div class="ag-feature-note">{escaped(quality_notes)}</div><div class="ag-feature-note" style="margin-top:.35rem">Lighting, contrast and resolution heuristic—not an AI diagnosis.</div></div>',
+                unsafe_allow_html=True,
+            )
             with st.container(border=True):
-                st.markdown('<div class="ag-kicker">03 · ANALYSIS</div><div class="ag-glass-title" style="font-size:1.35rem;margin-top:.5rem">Ready when you are.</div><div class="ag-secondary">The classifier ranks candidate classes. In hybrid mode, advanced vision adds observations separately so the two signals are not confused.</div>', unsafe_allow_html=True)
+                st.markdown('<div class="ag-kicker">NEXT · RUN YOUR SCAN</div><div class="ag-glass-title" style="font-size:1.35rem;margin-top:.5rem">Ready when you are.</div><div class="ag-secondary">The classifier ranks candidate classes. Optional visual review adds a separate signal; neither confirms a diagnosis.</div>', unsafe_allow_html=True)
+                st.text_input("Field note (optional)", key="ag_field_note", placeholder="e.g. tomato plant · north garden · leaf 03")
                 st.markdown('<div class="ag-divider"></div>', unsafe_allow_html=True)
                 if mode == "ESP32-CAM" and not st.session_state.get("ag_esp32_preview_first", False):
                     st.markdown('<span class="ag-pill">✓ &nbsp; Image captured · auto-analysis requested</span>', unsafe_allow_html=True)
@@ -824,15 +1074,41 @@ report = st.session_state.get("ag_report")
 if report and report.get("image_hash") == st.session_state.get("ag_image_hash"):
     render_report(report)
 
-# ---------------------------- Extra product design ----------------------------
-st.markdown('<div class="ag-divider"></div><div class="ag-section-title">Built for a real field workflow</div><div class="ag-section-sub">Three deliberate steps—from an image to a report you can verify.</div>', unsafe_allow_html=True)
-step1, step2, step3 = st.columns(3, gap="medium")
-with step1:
-    st.markdown('<div class="ag-glass"><div class="ag-step-num">01</div><div class="ag-step-title">Capture the leaf</div><div class="ag-step-body">Upload a photo, use the browser camera, or request a frame from a configured ESP32-CAM.</div></div>', unsafe_allow_html=True)
-with step2:
-    st.markdown('<div class="ag-glass"><div class="ag-step-num">02</div><div class="ag-step-title">Compare AI signals</div><div class="ag-step-body">The specialist classifier ranks classes. Optional multimodal review describes visible evidence and questions to verify.</div></div>', unsafe_allow_html=True)
-with step3:
-    st.markdown('<div class="ag-glass"><div class="ag-step-num">03</div><div class="ag-step-title">Verify before action</div><div class="ag-step-body">Compare multiple leaves and consult an agricultural expert before choosing a treatment.</div></div>', unsafe_allow_html=True)
+# ---------------------------- Field notebook + feature overview ----------------------------
+st.markdown('<div class="ag-divider"></div><div class="ag-section-head"><div><div class="ag-section-title">A little more than a classifier.</div><div class="ag-section-sub">Useful field tools, kept out of the way until you need them.</div></div></div>', unsafe_allow_html=True)
+st.markdown(
+    """<div class="ag-feature-grid">
+      <div class="ag-feature-card"><div class="ag-feature-icon">◉</div><div class="ag-feature-title">Capture quality hints</div><div class="ag-feature-body">A transparent check for brightness, tonal contrast and resolution before you trust a scan.</div></div>
+      <div class="ag-feature-card"><div class="ag-feature-icon">⌁</div><div class="ag-feature-title">Two-model research path</div><div class="ag-feature-body">Switch between the specialist Vision Transformer and a lightweight fallback, then document how they differ.</div></div>
+      <div class="ag-feature-card"><div class="ag-feature-icon">↗</div><div class="ag-feature-title">Portable scan reports</div><div class="ag-feature-body">Export report data to JSON and keep a lightweight, session-only notebook of recent results.</div></div>
+    </div>""",
+    unsafe_allow_html=True,
+)
+
+history = st.session_state.get("ag_history", [])
+with st.expander(f"Field notebook · {len(history)} scan{'s' if len(history) != 1 else ''} in this session", expanded=bool(history)):
+    st.markdown('<div class="ag-feature-note">Recent scan metadata is kept in this Streamlit session only; images are not stored in the notebook. Refreshing or ending the session may clear it.</div>', unsafe_allow_html=True)
+    if history:
+        rows_for_csv = []
+        for record in history[:8]:
+            st.markdown(
+                f'<div class="ag-history-row"><div><div class="ag-history-name">{escaped(pretty_label(record["prediction"]))}</div><div class="ag-history-meta">{escaped(record["created_at"])} · {escaped(record["source"])} · {escaped(record["filename"])}<br>Model: {escaped(record["model_id"])} · Capture check: {record["quality_score"]}/100</div>{f"<div class='ag-feature-note'>Note: {escaped(record["field_note"])}</div>" if record.get("field_note") else ""}</div><div><div class="ag-history-score">{record["score"]:.1%}</div><div class="ag-feature-note">model score</div></div></div>',
+                unsafe_allow_html=True,
+            )
+            rows_for_csv.append({k: record.get(k, "") for k in ["created_at", "source", "filename", "prediction", "score", "model_id", "quality_score", "field_note"]})
+        csv_stream = io.StringIO()
+        writer = csv.DictWriter(csv_stream, fieldnames=["created_at", "source", "filename", "prediction", "score", "model_id", "quality_score", "field_note"])
+        writer.writeheader()
+        writer.writerows(rows_for_csv)
+        h1, h2 = st.columns([1, 1], gap="medium")
+        with h1:
+            st.download_button("↓  Export notebook · CSV", data=csv_stream.getvalue(), file_name="agriscan-field-notebook.csv", mime="text/csv", use_container_width=True, key="ag_export_history")
+        with h2:
+            if st.button("Clear this session's notebook", use_container_width=True, key="ag_clear_history"):
+                st.session_state["ag_history"] = []
+                st.rerun()
+    else:
+        st.markdown('<div class="ag-glass"><div class="ag-glass-title">Your field notebook is ready.</div><div class="ag-secondary">Complete a scan and its result will appear here, ready to export for your competition notes.</div></div>', unsafe_allow_html=True)
 
 with st.expander("ESP32-CAM integration guide", expanded=False):
     st.markdown("""

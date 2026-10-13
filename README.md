@@ -1,6 +1,17 @@
 # Agriscan AI — Streamlit field prototype
 
-Premium dark forest/sage Streamlit app with deliberate high-contrast styles, restrained animations, image upload/browser camera, a configurable ESP32-CAM server-side capture workflow, a PlantVillage ViT classifier, optional Gemini 3.1 Pro multimodal visual review, and honest limitations.
+Premium dark forest/sage Streamlit app with a redesigned split hero, orbital botanical animation, high-contrast typography, image upload/browser camera, a configurable ESP32-CAM server-side capture workflow, a PlantVillage ViT classifier, optional Gemini multimodal visual review, lightweight capture-quality hints, a model-comparison research lab, exportable JSON reports, and a session-only field notebook.
+
+## What's new in the design and feature upgrade
+
+- **Editorial split hero:** keeps the forest/sage aesthetic, with a calmer layout hierarchy and a single botanical focal point.
+- **Refined motion:** slow ambient lighting, orbital rings, a floating leaf mark, staggered card reveals, hover lift and animated progress. Animations honor `prefers-reduced-motion`.
+- **Capture-quality hints:** uses image brightness, grayscale contrast and pixel dimensions to surface practical rescan suggestions. It is a simple heuristic, not a disease detector or guarantee of image quality.
+- **Research Lab:** optionally runs the alternative classifier against the same image and compares the top-ranked outputs. It can take longer, particularly when loading the Vision Transformer. Agreement does not prove correctness; disagreement is a reason to verify.
+- **Field notebook:** remembers the last 12 scan summaries during the active Streamlit session and can export them as CSV. It stores scan metadata only, not the original photos, and may reset when the session ends.
+- **Portable report:** exports the current prediction, model metadata, quality hints and field note as JSON. It does not include the uploaded image.
+
+The page is intentionally kept calm: advanced model interpretation, comparison and hardware setup remain inside expanders instead of competing with the main scan action.
 
 ## Run locally
 
